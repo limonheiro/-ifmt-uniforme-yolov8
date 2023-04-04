@@ -18,6 +18,7 @@ app = FastAPI(root_path=".")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory='templates')
 
+
 origins = [
     "http://localhost",
     "http://localhost:8000",
