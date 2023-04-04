@@ -9,13 +9,13 @@
   <iframe name="dummyframe" id="dummyframe" style="display: none;"></iframe>
   <form onsubmit="download('results.json', '{{ bbox_data_str }}')" target="dummyframe">
     <h2>Resultados</h2>
-    <input class="btn btn-primary" type="submit" value="Baixar Resultados">
+<!--    <input class="btn btn-primary" type="submit" value="Baixar Resultados">-->
   </form>
 </div>
 
 <div class="d-flex flex-row flex-wrap">
- 
-  <div class="p=3 bd-highlight container w-25">
+  {% for box_values_list in box_values_list %}
+  <div class="p=3 bd-highlight container w-20">
     <table class="table">
       <thead>
         <tr>
@@ -24,23 +24,22 @@
           <th>Confidence</th>
         </tr>
       </thead>
-      {% for box in bbox_list %}
+      {% for xy,conf in box_values_list['boxes_conf']  %}
       <tr>
-        <td>{{names[0]}}</td>
-        <td>{{box.xyxy[0]}}</td>
-        <td>{{box.conf}}</td>
+        <td>{{ box_values_list['names'] }}</td>
+        <td>{{ xy }}</td>
+        <td>{{ conf }}</td>
       </tr>
       {% endfor %}
     </table>
-
     <!--Display base64 encoded image, scale image so it fits browser window horizontally -->
-    <img src="data:image/jpeg;charset=utf-8;base64,{{ img_base64 }}" id="result_image"
-      style="max-width: 80%;height: auto;width: auto\1;" />
-
+    <img src="data:image/jpeg;charset=utf-8;base64,{{ box_values_list['im_b64'] }}" id="result_image"
+      style="max-width: 300px;height: auto;width: auto\1;" />
     <hr />
   </div>
+  {% endfor %}
 </div>
-<script>
+<!--<script>
   // from https://stackoverflow.com/questions/3665115/how-to-create-a-file-in-memory-for-user-to-download-but-not-through-server/18197341#18197341
   function download(filename, text) {
     var element = document.createElement('a');
@@ -54,7 +53,7 @@
 
     document.body.removeChild(element);
   }
-</script>
+</script>-->
 
 {% endif %}
 

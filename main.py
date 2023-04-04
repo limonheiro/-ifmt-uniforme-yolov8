@@ -14,7 +14,7 @@ import base64
 
 from ultralytics import YOLO, checks
 
-app = FastAPI(root_path=".")
+app = FastAPI(root_path="")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory='templates')
 
@@ -72,7 +72,7 @@ def about_us(request: Request):
 ##############################################
 @app.post("/")
 async def detect_via_web_form(request: Request,
-                              file: UploadFile = File(...),
+                              file:  List[UploadFile] = File(...),
                               ):
     '''
     Requires an image file upload, model name (ex. yolov8n). Optional image size parameter (Default 640).
@@ -83,36 +83,42 @@ async def detect_via_web_form(request: Request,
     # create a copy that corrects for cv2.imdecode generating BGR images instead of RGB
     # using cvtColor instead of [...,::-1] to keep array contiguous in RAM
     # img_batch_rgb = [cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in img_batch]
-    img_batch = cv2.imdecode(np.fromstring(await file.read(), np.uint8), cv2.IMREAD_COLOR)
+    img_batch = [cv2.imdecode(np.fromstring(await file.read(), np.uint8), cv2.IMREAD_COLOR) for file in file]
+    #img_batch = cv2.imdecode(np.fromstring(await file.read(), np.uint8), cv2.IMREAD_COLOR)
 
     model = YOLO('static/weight/best.pt')  # load a custom model
     results = model(img_batch, imgsz=640)
-    img = results[0].plot()
 
-    for result in results:
-        names = result.names
-        boxes = result.boxes  # Boxes object for bbox outputs
-        masks = result.masks  # Masks object for segmentation masks outputs
-        probs = result.probs  # Class probabilities for classification outputs
 
-    # results = model(img_batch_rgb,stream=True)
+
+    box_values_list=results_values(results)
     
-    _, im_arr = cv2.imencode('.jpg', img)
-    im_b64 = base64.b64encode(im_arr.tobytes()).decode('utf-8')
-        # <td>{{names[0]}}</td>
-        # <td>{{box.xyxy[0]}}</td>
-        # <td>{{box.conf}}</td>
+
 
     return templates.TemplateResponse('show_results.html', {
         'request': request,
         'end': True,
         # unzipped in jinja2 template
-        'img_base64': im_b64,
-        'bbox_list': boxes,
-        'names': names,
-        'bbox_data_str': masks,
+        'box_values_list': box_values_list
     })
 
+
+def results_values(results):
+    r = []
+    for result in results:
+        img = result.plot()
+        _, im_arr = cv2.imencode('.jpeg', img)
+        im_b64 = base64.b64encode(im_arr.tobytes()).decode('utf-8')
+        names = result.names
+        boxes = result.boxes  # Boxes object for bbox outputs
+        # masks = result.masks  # Masks object for segmentation masks outputs
+        # probs = result.probs  # Class probabilities for classification outputs
+        r.append({
+            'im_b64': im_b64,
+            'names': names[0],
+            'boxes_conf': zip([x for x in boxes.xyxy.tolist()],[x for x in boxes.conf.tolist()]),
+        })
+    return r
 
 
 if __name__ == '__main__':
