@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<!-- <h5>Envie a(s) imagem(ns)</h5>
+
+<hr/> -->
+<div class="container">
+  <form method="post" action="" enctype="multipart/form-data">
+    <div class="mb-3">
+      <label for="file" class="form-label">Envie a(s) Imagem(ns)</label>
+      <input class="form-control w-auto" type="file" name="file" id="file" multiple>
+    </div>
+  
+    <button class="btn btn-primary" type="submit">Submit</button>
+  </form>
+</div>
+
+  {% block show_results %}{% endblock %}
+{% endblock %}

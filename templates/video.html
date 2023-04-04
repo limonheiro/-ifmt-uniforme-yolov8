@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<!-- <h5>Envie a(s) imagem(ns)</h5>
+
+<hr/> -->
+<div class="container">
+  <form method="post" action="" enctype="multipart/form-data">
+    <div class="mb-3">
+      <label for="file" class="form-label">Envie as Imagens Images</label>
+      <input class="form-control w-auto" type="file" name="file" id="file">
+    </div>
+    <button class="btn btn-primary" type="submit">Submit</button>
+  </form>
+</div>
+
+  {% if video %}
+  <div class="container">
+    <video controls autoplay>
+      <source src=/get_video/{{ video }} download={{ filename }} type="video/mp4">
+    </video>
+  </div>
+  {% elif mensagem %}
+  <div class="container">
+    <div class="alert alert-danger" role="alert">
+      {{ mensagem }}
+    </div>
+  </div>
+
+  {% endif %}
+
+{% endblock %}
