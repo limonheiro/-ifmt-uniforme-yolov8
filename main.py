@@ -39,7 +39,6 @@ files = {
     for item in os.listdir('static/infer/output/')
 }
 
-
 # Command line subprocess
 # https://stackoverflow.com/a/29610897
 def cmdline(command):
@@ -76,17 +75,15 @@ async def detect_via_web_form(request: Request,
                               file: UploadFile = File(...),
                               ):
     '''
-    Requires an image file upload, model name (ex. yolov5s). Optional image size parameter (Default 640).
+    Requires an image file upload, model name (ex. yolov8n). Optional image size parameter (Default 640).
     Intended for human (non-api) users.
     Returns: HTML template render showing bbox data and base64 encoded image
     '''
 
-
     # create a copy that corrects for cv2.imdecode generating BGR images instead of RGB
     # using cvtColor instead of [...,::-1] to keep array contiguous in RAM
     # img_batch_rgb = [cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in img_batch]
-    content = await file.read()
-    img_batch = cv2.imdecode(np.fromstring(content, np.uint8), cv2.IMREAD_COLOR) 
+    img_batch = cv2.imdecode(np.fromstring(await file.read(), np.uint8), cv2.IMREAD_COLOR)
 
     model = YOLO('static/weight/best.pt')  # load a custom model
     results = model(img_batch, imgsz=640)
@@ -98,7 +95,6 @@ async def detect_via_web_form(request: Request,
         masks = result.masks  # Masks object for segmentation masks outputs
         probs = result.probs  # Class probabilities for classification outputs
 
-    print(boxes)
     # results = model(img_batch_rgb,stream=True)
     
     _, im_arr = cv2.imencode('.jpg', img)
@@ -106,6 +102,7 @@ async def detect_via_web_form(request: Request,
         # <td>{{names[0]}}</td>
         # <td>{{box.xyxy[0]}}</td>
         # <td>{{box.conf}}</td>
+
     return templates.TemplateResponse('show_results.html', {
         'request': request,
         'end': True,
