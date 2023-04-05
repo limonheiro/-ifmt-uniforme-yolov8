@@ -27,8 +27,10 @@
       {% for xy,conf in box_values_list['boxes_conf']  %}
       <tr>
         <td>{{ box_values_list['names'] }}</td>
-        <td>{{ xy }}</td>
-        <td>{{ conf }}</td>
+
+        <td>[{% for i in xy  %}{{ "%.2f"|format(i) }}{{ ", " if not loop.last else "" }}{% endfor %}]
+        </td>
+        <td>{{ "%.2f"|format(conf) }}</td>
       </tr>
       {% endfor %}
     </table>

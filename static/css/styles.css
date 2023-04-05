@@ -16,3 +16,16 @@ h5 {
 .container {
     padding-bottom: .2em;
 }
+
+.col-sm-4{
+    padding: .2em;
+}
+
+.result{
+    padding-top: 1em;
+    padding-left: 0;
+}
+
+video{
+    padding-left: 0;
+}
