@@ -1,5 +1,5 @@
-from typing import List, Optional, Annotated, Generator, Any
-from fastapi import FastAPI, Request, Form, File, UploadFile, Query
+from typing import List, BinaryIO
+from fastapi import FastAPI, Request, HTTPException, File, UploadFile, status
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, FileResponse, Response
@@ -13,8 +13,9 @@ import cv2
 import base64
 
 from ultralytics import YOLO, checks
+import ffmpeg
 
-app = FastAPI(root_path="")
+app = FastAPI(root_path=".")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory='templates')
 
@@ -33,27 +34,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-files = {
-    item: os.path.join('static/infer/output/', item)
-    for item in os.listdir('static/infer/output/')
-}
-
 model = YOLO('static/weight/best.pt')  # load a custom model
 
+os.makedirs("static/predict/", exist_ok=True)
 
-# Command line subprocess
-# https://stackoverflow.com/a/29610897
-def cmdline(command):
-    process = Popen(
-        args=command,
-        stdout=PIPE,
-        shell=True
+# Code copied from https://github.com/kkroening/ffmpeg-python/issues/246#issuecomment-520200981
+def vidwrite(input, output, vcodec='libx264'):
+    process = (
+        ffmpeg
+        .input(input)
+        .output(output, vcodec=vcodec)
+        .overwrite_output()
+        .run()
     )
-    return str(process.communicate()[0])
-
-
-color = (0, 200, 0)  # for bbox plotting
-
+    process
 
 @app.get("/")
 def home(request: Request):
@@ -70,23 +64,21 @@ def about_us(request: Request):
 
 
 @app.get("/video/")
-def about_us(request: Request, link: str | None = None):
+def video(request: Request, link: str | None = None):
     '''
     Display about us page
     '''
     if link:
-        for i in model.predict(link, stream=True, save=True, name="", exist_ok=True, project="."):
-            continue
+        get_model_result(model, link)
 
         filename = link.split('/')[-1].replace('?', '_').replace('=', '_')
         filename = filename + '.mp4'
         name = 'predict/' + filename
         return templates.TemplateResponse('video.html',
-                                          {"request": request, "link": link, 'filename': filename})
+                                          {"request": request, 'filename': filename})
 
     return templates.TemplateResponse('video.html',
                                       {"request": request})
-
 
 
 ##############################################
@@ -127,19 +119,34 @@ async def video(request: Request, file: UploadFile = File(...)):
     '''
 
     content = await file.read()
-    format = ['asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv', '.webm']
+    filename = file.filename
 
-    if (len(content) > 2000000):
+    if (len(content) > 10000000):
         return templates.TemplateResponse('video.html', {
             "request": request,
-            "mensagem": "Apenas aquivos menores que 2MB."
+            "mensagem": "Apenas aquivos menores que 10MB."
         })
 
-    return templates.TemplateResponse('video.html', {
-        "request": request,
-        "filename": str(filename_conv),
-        "video": filename_conv
-    })
+    dir_input = "static/input/"
+    os.makedirs(dir_input, exist_ok=True)
+    new_file = f"{dir_input + filename}"
+
+    with open(new_file, "wb") as f:
+        f.write(content)
+
+    get_model_result(model, new_file)
+
+    filename = f'{filename.split(".")[0]}.mp4'
+    return templates.TemplateResponse('video.html',
+                                      {"request": request,
+                                       'filename': filename})
+
+
+def get_model_result(model, path) -> None:
+    for _ in model.predict(path, stream=True, save=True, name="", exist_ok=True, project=".", vid_stride=True):
+        continue
+    filename = filename.split('.')[0] + 'conv.mp4'
+    vidwrite(filename, filename)
 
 
 def results_values(results):
@@ -160,16 +167,31 @@ def results_values(results):
     return r
 
 
+async def iterable(file_output):  #
+    with open(file_output, mode="rb") as f:  #
+        yield f.read()
+
+
 @app.get("/get_video/{video_path}")
-async def get_video(video_path: str):
+def get_video(video_path: str):
 
+    print(video_path)
     if video_path:
-        def videotex(file_output: str) -> Generator[bytes, Any, None]:  #
-            with open(file_output, mode="rb") as file_like:  #
-                yield file_like.read()  #
+        filename = f'static/predict/{video_path}'
 
-        return FileResponse(f'predict/{video_path}', status_code=206, headers={
-            'Content-Disposition': f'attachment;'}, filename="video_path",media_type="video/mp4",)
+        file_stats = os.stat(filename)
+        headers = {'Content-Disposition': f'attachment; filename="{video_path}.mp4"',
+                   'accept-ranges': 'bytes',
+                   'cache-control': 'no-cache',
+                   'content-length': f'{file_stats.st_size}',
+                   'content-range': f'bytes */{file_stats.st_size}'
+                   }
+
+        response = StreamingResponse(iterable(filename),
+                                     status_code=206,
+                                     headers=headers,
+                                     media_type="video/mp4")
+        return response
     else:
         return Response(status_code=404)
 
@@ -181,5 +203,5 @@ if __name__ == '__main__':
     # parser.add_argument('--gpu', action='store_false', help="Choise GPU instance")
     opt = parser.parse_args()
 
-    app_str = 'server:app'  # make the app string equal to whatever the name of this file is
+    app_str = 'main:app'  # make the app string equal to whatever the name of this file is
     uvicorn.run(app_str, host=opt.host, port=opt.port, reload=True)
