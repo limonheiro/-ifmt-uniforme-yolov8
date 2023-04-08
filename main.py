@@ -1,8 +1,8 @@
-from typing import List, BinaryIO
-from fastapi import FastAPI, Request, HTTPException, File, UploadFile, status
+from typing import List
+from fastapi import FastAPI, Request, File, UploadFile
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse, FileResponse, Response
+from fastapi.responses import StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 import uvicorn
@@ -12,7 +12,7 @@ import numpy as np
 import cv2
 import base64
 
-from ultralytics import YOLO, checks
+from ultralytics import YOLO
 import ffmpeg
 
 app = FastAPI(root_path=".")
@@ -36,7 +36,7 @@ app.add_middleware(
 
 model = YOLO('static/weight/best.pt')  # load a custom model
 
-os.makedirs("static/predict/", exist_ok=True)
+dir_predict = "static/predict/"
 
 # Code copied from https://github.com/kkroening/ffmpeg-python/issues/246#issuecomment-520200981
 def vidwrite(input, output, vcodec='libx264'):
@@ -49,6 +49,12 @@ def vidwrite(input, output, vcodec='libx264'):
     )
     process
 
+
+##############################################
+# ------------GET Request Routes--------------
+##############################################
+
+
 @app.get("/")
 def home(request: Request):
     return templates.TemplateResponse('home.html', {"request": request})
@@ -58,6 +64,7 @@ def home(request: Request):
 def about_us(request: Request):
     '''
     Display about us page
+    ok
     '''
 
     return templates.TemplateResponse('about.html', {"request": request})
@@ -72,18 +79,52 @@ def video(request: Request, link: str | None = None):
         get_model_result(model, link)
 
         filename = link.split('/')[-1].replace('?', '_').replace('=', '_')
-        filename = filename + '.mp4'
-        name = 'predict/' + filename
+        filename = f'{filename}.mp4'
+
+        out_file = f'{filename.split(".")[0]}conv.mp4'
+        vidwrite(f'{dir_predict}{filename}', f'{dir_predict}{out_file}')
+
         return templates.TemplateResponse('video.html',
-                                          {"request": request, 'filename': filename})
+                                          {"request": request, 'filename': out_file.split('/')[-1]})
 
     return templates.TemplateResponse('video.html',
                                       {"request": request})
 
 
+@app.get("/get_video/{video_path}")
+def get_video(video_path: str):
+    if video_path:
+        filename = f'static/predict/{video_path}'
+
+        file_stats = os.stat(filename)
+        headers = {'Content-Disposition': f'attachment; filename="{video_path}.mp4"',
+                   'accept-ranges': 'bytes',
+                   'cache-control': 'no-cache',
+                   'content-length': f'{file_stats.st_size}',
+                   'content-range': f'bytes */{file_stats.st_size}'
+                   }
+
+        response = StreamingResponse(iterable(filename),
+                                     status_code=206,
+                                     headers=headers,
+                                     media_type="video/mp4")
+        return response
+    else:
+        return Response(status_code=404)
+
+
+@app.get("/webcam/")
+def webcam_livestream(request: Request):
+    return templates.TemplateResponse("webcam.html", {
+        'request': request,
+    })
+
+
 ##############################################
 # ------------POST Request Routes--------------
 ##############################################
+
+
 @app.post("/")
 async def detect_via_web_form(request: Request,
                               file: List[UploadFile] = File(...),
@@ -96,10 +137,7 @@ async def detect_via_web_form(request: Request,
 
     # create a copy that corrects for cv2.imdecode generating BGR images instead of RGB
     # using cvtColor instead of [...,::-1] to keep array contiguous in RAM
-    # img_batch_rgb = [cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in img_batch]
     img_batch = [cv2.imdecode(np.fromstring(await file.read(), np.uint8), cv2.IMREAD_COLOR) for file in file]
-    # img_batch = cv2.imdecode(np.fromstring(await file.read(), np.uint8), cv2.IMREAD_COLOR)
-
     results = model(img_batch, imgsz=640)
 
     box_values_list = results_values(results)
@@ -112,6 +150,26 @@ async def detect_via_web_form(request: Request,
     })
 
 
+#@app.post("/webcam")
+async def detect_via_webcam(file: UploadFile = File(...)):
+    '''
+    Requires an image file upload, model name (ex. yolov8n). Optional image size parameter (Default 640).
+    Intended for human (non-api) users.
+    Returns: HTML template render showing bbox data and base64 encoded image
+    '''
+
+    # create a copy that corrects for cv2.imdecode generating BGR images instead of RGB
+    # using cvtColor instead of [...,::-1] to keep array contiguous in RAM
+    file = await file.read()
+    img_batch = cv2.imdecode(np.fromstring(file, np.uint8), cv2.IMREAD_COLOR)
+    img_batch_rgb = cv2.cvtColor(img_batch, cv2.COLOR_BGR2RGB)
+    results = model(img_batch_rgb, imgsz=640)
+
+    box_values_list = results_values(results)
+
+    return box_values_list[0]['im_b64']
+
+
 @app.post("/video/")
 async def video(request: Request, file: UploadFile = File(...)):
     '''
@@ -121,13 +179,13 @@ async def video(request: Request, file: UploadFile = File(...)):
     content = await file.read()
     filename = file.filename
 
-    if (len(content) > 10000000):
+    if len(content) > 10000000:
         return templates.TemplateResponse('video.html', {
             "request": request,
             "mensagem": "Apenas aquivos menores que 10MB."
         })
 
-    dir_input = "static/input/"
+    dir_input = dir_predict
     os.makedirs(dir_input, exist_ok=True)
     new_file = f"{dir_input + filename}"
 
@@ -136,17 +194,17 @@ async def video(request: Request, file: UploadFile = File(...)):
 
     get_model_result(model, new_file)
 
-    filename = f'{filename.split(".")[0]}.mp4'
+    filename = f'{new_file.split(".")[0]}conv.mp4'
+    vidwrite(new_file, filename)
+
     return templates.TemplateResponse('video.html',
                                       {"request": request,
-                                       'filename': filename})
+                                       'filename': filename.split('/')[-1]})
 
 
 def get_model_result(model, path) -> None:
-    for _ in model.predict(path, stream=True, save=True, name="", exist_ok=True, project=".", vid_stride=True):
+    for _ in model.predict(path, stream=True, save=True, name="", exist_ok=True, project="static/", vid_stride=True):
         continue
-    filename = filename.split('.')[0] + 'conv.mp4'
-    vidwrite(filename, filename)
 
 
 def results_values(results):
@@ -170,30 +228,6 @@ def results_values(results):
 async def iterable(file_output):  #
     with open(file_output, mode="rb") as f:  #
         yield f.read()
-
-
-@app.get("/get_video/{video_path}")
-def get_video(video_path: str):
-
-    print(video_path)
-    if video_path:
-        filename = f'static/predict/{video_path}'
-
-        file_stats = os.stat(filename)
-        headers = {'Content-Disposition': f'attachment; filename="{video_path}.mp4"',
-                   'accept-ranges': 'bytes',
-                   'cache-control': 'no-cache',
-                   'content-length': f'{file_stats.st_size}',
-                   'content-range': f'bytes */{file_stats.st_size}'
-                   }
-
-        response = StreamingResponse(iterable(filename),
-                                     status_code=206,
-                                     headers=headers,
-                                     media_type="video/mp4")
-        return response
-    else:
-        return Response(status_code=404)
 
 
 if __name__ == '__main__':
