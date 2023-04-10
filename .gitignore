@@ -131,3 +131,5 @@ dmypy.json
 
 #video
 .mp4
+stream_loop.py
+yolov8n.pt
