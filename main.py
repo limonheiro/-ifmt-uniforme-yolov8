@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Any
 from fastapi import FastAPI, Request, File, UploadFile
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -38,17 +38,6 @@ model = YOLO('static/weight/best.pt')  # load a custom model
 
 dir_predict = "static/predict/"
 
-# Code copied from https://github.com/kkroening/ffmpeg-python/issues/246#issuecomment-520200981
-def vidwrite(input, output, vcodec='libx264'):
-    process = (
-        ffmpeg
-        .input(input)
-        .output(output, vcodec=vcodec)
-        .overwrite_output()
-        .run()
-    )
-    process
-
 
 ##############################################
 # ------------GET Request Routes--------------
@@ -75,14 +64,19 @@ def video(request: Request, link: str | None = None):
     '''
     Display about us page
     '''
+
     if link:
-        get_model_result(model, link)
+        link = youtube_link(link)
+        get_model_result(model, youtube_link(link))
 
         filename = link.split('/')[-1].replace('?', '_').replace('=', '_')
-        filename = f'{filename}.mp4'
 
-        out_file = f'{filename.split(".")[0]}conv.mp4'
-        vidwrite(f'{dir_predict}{filename}', f'{dir_predict}{out_file}')
+        out_file = f'{dir_predict}{filename}conv.mp4'
+        filename = f'{dir_predict}{filename}.mp4'
+
+        vidwrite(filename, out_file)
+
+        delete_video_files(filename)
 
         return templates.TemplateResponse('video.html',
                                           {"request": request, 'filename': out_file.split('/')[-1]})
@@ -150,7 +144,48 @@ async def detect_via_web_form(request: Request,
     })
 
 
-#@app.post("/webcam")
+@app.post("/video/")
+async def video(request: Request, file: UploadFile = File(...)):
+    '''
+    Requires an video file upload, max_size 2Mb
+    '''
+
+    content = await file.read()
+    filename = file.filename
+
+    if len(content) > 10000000:
+        return templates.TemplateResponse('video.html', {
+            "request": request,
+            "mensagem": "Apenas aquivos menores que 10MB."
+        })
+    permit_video_format: list[str | Any] = ['asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv', 'webm']
+
+    if not (filename.split("/")[-1].split(".")[-1] in permit_video_format):
+        return templates.TemplateResponse('video.html', {
+            "request": request,
+            "mensagem": f"formatos de video aceitos: {permit_video_format}"
+        })
+
+    dir_input = dir_predict
+    os.makedirs(dir_input, exist_ok=True)
+    new_file = f"{dir_input + filename}"
+
+    with open(new_file, "wb") as f:
+        f.write(content)
+
+    get_model_result(model, new_file)
+
+    filename = f'{new_file.split(".")[0]} conv.mp4'
+    vidwrite(f'{new_file.split(".")[0]}.mp4', filename)
+
+    delete_video_files(new_file)
+
+    return templates.TemplateResponse('video.html',
+                                      {"request": request,
+                                       'filename': filename.split('/')[-1]})
+
+
+# @app.post("/webcam")
 async def detect_via_webcam(file: UploadFile = File(...)):
     '''
     Requires an image file upload, model name (ex. yolov8n). Optional image size parameter (Default 640).
@@ -170,40 +205,16 @@ async def detect_via_webcam(file: UploadFile = File(...)):
     return box_values_list[0]['im_b64']
 
 
-@app.post("/video/")
-async def video(request: Request, file: UploadFile = File(...)):
-    '''
-    Requires an video file upload, max_size 2Mb
-    '''
-
-    content = await file.read()
-    filename = file.filename
-
-    if len(content) > 10000000:
-        return templates.TemplateResponse('video.html', {
-            "request": request,
-            "mensagem": "Apenas aquivos menores que 10MB."
-        })
-
-    dir_input = dir_predict
-    os.makedirs(dir_input, exist_ok=True)
-    new_file = f"{dir_input + filename}"
-
-    with open(new_file, "wb") as f:
-        f.write(content)
-
-    get_model_result(model, new_file)
-
-    filename = f'{new_file.split(".")[0]}conv.mp4'
-    vidwrite(new_file, filename)
-
-    return templates.TemplateResponse('video.html',
-                                      {"request": request,
-                                       'filename': filename.split('/')[-1]})
-
-
 def get_model_result(model, path) -> None:
-    for _ in model.predict(path, stream=True, save=True, name="", exist_ok=True, project="static/", vid_stride=True):
+    for _ in model.predict(path,
+                           stream=True,
+                           save=True,
+                           name="",
+                           exist_ok=True,
+                           project="static/",
+                           vid_stride=True,
+                           line_thickness=2
+                           ):
         continue
 
 
@@ -228,6 +239,32 @@ def results_values(results):
 async def iterable(file_output):  #
     with open(file_output, mode="rb") as f:  #
         yield f.read()
+
+
+# Code copied from https://github.com/kkroening/ffmpeg-python/issues/246#issuecomment-520200981
+def vidwrite(input: str, output: str, vcodec='libx264') -> None:
+    process = (
+        ffmpeg
+        .input(input)
+        .output(output, vcodec=vcodec)
+        .overwrite_output()
+        .run()
+    )
+    process
+
+
+def delete_video_files(filename: str) -> None:
+    os.remove(filename)
+    if os.path.isfile(f'{filename.split(".")[0]}.mp4'):
+        os.remove(f'{filename.split(".")[0]}.mp4')
+
+
+def youtube_link(link: str) -> str:
+    if "youtube" in link and not "watch?v=" in link:
+        link = f'https://youtube.com/watch?v={link.split("/")[-1]}'
+    elif "watch?v=" in link:
+        link = f'https://youtube.com/watch?v={link.split("watch?v=")[-1]}'
+    return link
 
 
 if __name__ == '__main__':
