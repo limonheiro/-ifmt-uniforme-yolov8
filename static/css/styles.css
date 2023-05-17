@@ -29,3 +29,11 @@ h5 {
 video{
     padding-left: 0;
 }
+
+navbar{
+    padding-left: 0.5em;
+}
+
+.container-fluid{
+    padding-left: var(--bs-gutter-x,3.75rem)
+}

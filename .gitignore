@@ -133,3 +133,4 @@ dmypy.json
 *.mp4
 stream_loop.py
 yolov8n.pt
+runs/

@@ -15,7 +15,8 @@ import base64
 from ultralytics import YOLO
 import ffmpeg
 
-app = FastAPI(root_path=".")
+
+app = FastAPI(root_path="")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory='templates')
 
@@ -33,6 +34,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 model = YOLO('static/weight/best.pt')  # load a custom model
 
