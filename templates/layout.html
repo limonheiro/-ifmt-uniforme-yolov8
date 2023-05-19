@@ -20,7 +20,7 @@
   <!-- Navbar -->
   <div class="container-fluid" style="background-color: #212529;">
   <nav class="navbar navbar-expand navbar-dark bg-dark bg-body-tertiary" data-bs-theme="dark">
-    <a class="navbar-brand" href="/">YOLOv8 IFMT</a>
+    <a class="navbar-brand mb-0 h5" href="/">YOLOv8 IFMT</a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarScroll" aria-controls="navbarScroll" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -28,7 +28,11 @@
     <div class="collapse navbar-collapse" id="navbarScroll">
       <ul class="navbar-nav">
         <li class="nav-item">
-          <a class="nav-link" href="/video/">Video</a>
+            {% if video %}
+          <a class="nav-link active" href="/video/" >Video</a>
+            {% else %}
+            <a class="nav-link" href="/video/">Video</a>
+            {% endif %}
         </li>
         <li class="nav-item">
           <a class="nav-link" href="/docs">Docs</a>

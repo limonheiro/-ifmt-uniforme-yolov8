@@ -80,11 +80,14 @@ def video(request: Request, link: str | None = None):
 
         delete_video_files(filename)
 
+        print(out_file.split('/')[-1])
         return templates.TemplateResponse('video.html',
-                                          {"request": request, 'filename': out_file.split('/')[-1]})
+                                          {"request": request, 'filename': out_file.split('/')[-1],
+                                           "video": True})
 
     return templates.TemplateResponse('video.html',
-                                      {"request": request})
+                                      {"request": request,
+                                       "video": True})
 
 
 @app.get("/get_video/{video_path}")
@@ -184,7 +187,8 @@ async def video(request: Request, file: UploadFile = File(...)):
 
     return templates.TemplateResponse('video.html',
                                       {"request": request,
-                                       'filename': filename.split('/')[-1]})
+                                       'filename': filename.split('/')[-1],
+                                       "video": True})
 
 
 # @app.post("/webcam")
@@ -215,7 +219,7 @@ def get_model_result(model, path) -> None:
                            exist_ok=True,
                            project="static/",
                            vid_stride=True,
-                           line_thickness=2
+                           line_width=1,
                            ):
         continue
 
