@@ -15,7 +15,6 @@ import base64
 from ultralytics import YOLO
 import ffmpeg
 
-
 app = FastAPI(root_path="")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory='templates')
@@ -35,11 +34,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-model = YOLO('static/weight/best.pt')  # load a custom model
-
 dir_predict = "static/predict/"
 
+with open('static/weight/weight_name', 'r') as f:
+    weight = f.readline()
+
+model = YOLO(f'static/weight/{weight}')
 
 ##############################################
 # ------------GET Request Routes--------------
@@ -48,6 +48,7 @@ dir_predict = "static/predict/"
 
 @app.get("/")
 def home(request: Request):
+    global model
     return templates.TemplateResponse('home.html', {"request": request})
 
 
@@ -78,9 +79,8 @@ def video(request: Request, link: str | None = None):
 
         vidwrite(filename, out_file)
 
-        delete_video_files(filename)
+        delete_video_files([filename])
 
-        print(out_file.split('/')[-1])
         return templates.TemplateResponse('video.html',
                                           {"request": request, 'filename': out_file.split('/')[-1],
                                            "video": True})
@@ -163,7 +163,8 @@ async def video(request: Request, file: UploadFile = File(...)):
             "request": request,
             "mensagem": "Apenas aquivos menores que 10MB."
         })
-    permit_video_format: list[str | Any] = ['asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv', 'webm']
+    permit_video_format: list[str | Any] = ['asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv',
+                                            'webm']
 
     if not (filename.split("/")[-1].split(".")[-1] in permit_video_format):
         return templates.TemplateResponse('video.html', {
@@ -173,21 +174,24 @@ async def video(request: Request, file: UploadFile = File(...)):
 
     dir_input = dir_predict
     os.makedirs(dir_input, exist_ok=True)
-    new_file = f"{dir_input + filename}"
+    new_file = f"{dir_input}{filename}"
 
     with open(new_file, "wb") as f:
         f.write(content)
 
     get_model_result(model, new_file)
+    name = new_file.split(".")[0]
 
-    filename = f'{new_file.split(".")[0]} conv.mp4'
-    vidwrite(f'{new_file.split(".")[0]}.mp4', filename)
+    out_file = f'{name}conv.mp4'
+    filename = f'{name}.mp4'
+    print(filename)
+    vidwrite(filename, out_file)
 
-    delete_video_files(new_file)
+    delete_video_files([filename, new_file])
 
     return templates.TemplateResponse('video.html',
                                       {"request": request,
-                                       'filename': filename.split('/')[-1],
+                                       'filename': out_file.split('/')[-1],
                                        "video": True})
 
 
@@ -215,7 +219,7 @@ def get_model_result(model, path) -> None:
     for _ in model.predict(path,
                            stream=True,
                            save=True,
-                           name="",
+                           name="predict",
                            exist_ok=True,
                            project="static/",
                            vid_stride=True,
@@ -259,10 +263,11 @@ def vidwrite(input: str, output: str, vcodec='libx264') -> None:
     process
 
 
-def delete_video_files(filename: str) -> None:
-    os.remove(filename)
-    if os.path.isfile(f'{filename.split(".")[0]}.mp4'):
-        os.remove(f'{filename.split(".")[0]}.mp4')
+def delete_video_files(file_list: list) -> None:
+    for file in file_list:
+        os.remove(file)
+        if os.path.isfile(f'{file.split(".")[0]}.mp4'):
+            os.remove(f'{file.split(".")[0]}.mp4')
 
 
 def youtube_link(link: str) -> str:
@@ -278,7 +283,11 @@ if __name__ == '__main__':
     parser.add_argument('--host', default='localhost')
     parser.add_argument('--port', default=8000)
     # parser.add_argument('--gpu', action='store_false', help="Choise GPU instance")
+    parser.add_argument('--weight', default='bestn.pt')
     opt = parser.parse_args()
+
+    with open('static/weight/weight_name', 'w') as f:
+        f.write(opt.weight)
 
     app_str = 'main:app'  # make the app string equal to whatever the name of this file is
     uvicorn.run(app_str, host=opt.host, port=opt.port, reload=True)
