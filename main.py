@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 import uvicorn
 import argparse
@@ -16,6 +17,7 @@ from ultralytics import YOLO
 import ffmpeg
 
 app = FastAPI(root_path="")
+favicon_path = 'favicon.ico'
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory='templates')
 
@@ -40,6 +42,16 @@ with open('static/weight/weight_name', 'r') as f:
     weight = f.readline()
 
 model = YOLO(f'static/weight/{weight}')
+
+
+##############################################
+# -----------------Favicon--------------------
+##############################################
+
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    return FileResponse(favicon_path)
+
 
 ##############################################
 # ------------GET Request Routes--------------
