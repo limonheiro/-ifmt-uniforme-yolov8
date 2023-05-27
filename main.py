@@ -2,19 +2,22 @@ from typing import List, Any
 from fastapi import FastAPI, Request, File, UploadFile
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 import uvicorn
 import argparse
-import os
 import numpy as np
 import cv2
-import base64
 
 from ultralytics import YOLO
 import ffmpeg
+import os
+
+from utils.result import results_values
+
+from camera_multi import Camera
 
 app = FastAPI(root_path="")
 favicon_path = 'favicon.ico'
@@ -43,7 +46,6 @@ with open('static/weight/weight_name', 'r') as f:
 
 model = YOLO(f'static/weight/{weight}')
 
-
 ##############################################
 # -----------------Favicon--------------------
 ##############################################
@@ -51,6 +53,51 @@ model = YOLO(f'static/weight/{weight}')
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
     return FileResponse(favicon_path)
+
+
+############################################
+# -----------------Webcam--------------------
+#############################################
+
+@app.get("/webcam/")
+def webcam_livestream(request: Request):
+    return templates.TemplateResponse("webcam.html", {
+        'request': request,
+        'webcam': True
+    })
+
+
+def gen(camera):
+    """Video streaming generator function."""
+
+    while True:
+        try:
+            frame = camera.get_frame()
+
+            img_batch = cv2.imdecode(np.fromstring(frame, np.uint8), cv2.IMREAD_COLOR)
+            img_batch_rgb = cv2.cvtColor(img_batch, cv2.COLOR_BGR2RGB)
+            results = model(img_batch_rgb, imgsz=640)
+
+            for r in results:
+                img = r.plot()
+                frame = cv2.imencode('.jpg', cv2.cvtColor(img, cv2.COLOR_BGR2RGB))[1].tobytes()
+
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpg\r\n\r\n' + frame + b'\r\n')
+
+        except cv2.error as e:
+            camera.video.release()
+        except TypeError as e:
+            camera.video.release()
+
+
+
+
+@app.get('/video_feed', response_class=HTMLResponse)
+async def video_feed():
+    """Video streaming route. Put this in the src attribute of an img tag."""
+    return StreamingResponse(gen(Camera()),
+                             media_type='multipart/x-mixed-replace; boundary=frame')
 
 
 ##############################################
@@ -75,7 +122,7 @@ def about_us(request: Request):
 
 
 @app.get("/video/")
-def video(request: Request, link: str | None = None):
+async def video(request: Request, link: str | None = None):
     '''
     Display about us page
     '''
@@ -124,13 +171,6 @@ def get_video(video_path: str):
         return Response(status_code=404)
 
 
-@app.get("/webcam/")
-def webcam_livestream(request: Request):
-    return templates.TemplateResponse("webcam.html", {
-        'request': request,
-    })
-
-
 ##############################################
 # ------------POST Request Routes--------------
 ##############################################
@@ -149,7 +189,7 @@ async def detect_via_web_form(request: Request,
     # create a copy that corrects for cv2.imdecode generating BGR images instead of RGB
     # using cvtColor instead of [...,::-1] to keep array contiguous in RAM
     img_batch = [cv2.imdecode(np.fromstring(await file.read(), np.uint8), cv2.IMREAD_COLOR) for file in file]
-    results = model(img_batch, imgsz=640)
+    results = model(img_batch, imgsz=640, save=True)
 
     box_values_list = results_values(results)
 
@@ -188,8 +228,11 @@ async def video(request: Request, file: UploadFile = File(...)):
     os.makedirs(dir_input, exist_ok=True)
     new_file = f"{dir_input}{filename}"
 
-    with open(new_file, "wb") as f:
-        f.write(content)
+    try:
+        with open(new_file, "wb") as file:
+            file.write(content)
+    except Exception:
+        return {"message": "There was an error uploading the file"}
 
     get_model_result(model, new_file)
     name = new_file.split(".")[0]
@@ -238,24 +281,6 @@ def get_model_result(model, path) -> None:
                            line_width=1,
                            ):
         continue
-
-
-def results_values(results):
-    r = []
-    for result in results:
-        img = result.plot()
-        _, im_arr = cv2.imencode('.jpeg', img)
-        im_b64 = base64.b64encode(im_arr.tobytes()).decode('utf-8')
-        names = result.names
-        boxes = result.boxes  # Boxes object for bbox outputs
-        # masks = result.masks  # Masks object for segmentation masks outputs
-        # probs = result.probs  # Class probabilities for classification outputs
-        r.append({
-            'im_b64': im_b64,
-            'names': names[0],
-            'boxes_conf': zip([x for x in boxes.xyxy.tolist()], [x for x in boxes.conf.tolist()]),
-        })
-    return r
 
 
 async def iterable(file_output):  #

@@ -1,37 +1,9 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<!-- <h5>Envie a(s) imagem(ns)</h5>
-
-<hr/> -->
-<div class="container">
-  <form method="post" action="" enctype="multipart/form-data">
-    <div class="mb-3">
-      <label for="file" class="form-label">Arquivo de video do Computador.</label>
-      <input class="form-control w-auto" type="file" name="file" id="file">
-    </div>
-    <button class="btn btn-primary" type="submit">Enviar</button>
-  </form>
-</div>
-
-{% if filename %}
-<div class="container text-center">
-  <div class="row result">
-    <h2 class="col-sm-2">Resultado:</h2>
+  {% if webcam %}
+  <div class="container align-middle">
+      <img src="{{ url_for('video_feed') }}">
   </div>
-  <div class="row">
-    <video class="col-sm-4" controls autoplay>
-      <source src="/get_video/{{filename}}" download="{{filename}}" type="video/mp4">
-    </video>
-  </div>
-</div>
-{% elif mensagem %}
-<div class="container">
-  <div class="alert alert-danger" role="alert">
-    {{ mensagem }}
-  </div>
-</div>
-
   {% endif %}
-
 {% endblock %}
