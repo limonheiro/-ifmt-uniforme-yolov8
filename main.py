@@ -293,7 +293,7 @@ def vidwrite(input: str, output: str, vcodec='libx264') -> None:
     process = (
         ffmpeg
         .input(input)
-        .output(output, vcodec=vcodec)
+        .output(output, crf=25, vcodec=vcodec)
         .overwrite_output()
         .run()
     )
