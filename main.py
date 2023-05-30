@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 
 import uvicorn
 import argparse
+from pathlib import Path
 import numpy as np
 import cv2
 
@@ -46,6 +47,12 @@ with open('static/weight/weight_name', 'r') as f:
 
 model = YOLO(f'static/weight/{weight}')
 
+# https://github.com/ultralytics/ultralytics/blob/0d47d1139396496ab12ca004bead1021e0a4a6cf/ultralytics/yolo/utils/torch_utils.py#LL179C5-L179C99
+yaml_file = getattr(model.model, 'yaml_file', '') or getattr(model.model, 'yaml', {}).get('yaml_file', '')
+model_name = Path(yaml_file).stem.replace('yolo', 'YOLO') or model.info()
+model_name = f'Model summary: {model_name[0]} layers, {model_name[1]} parameters, {model_name[2]} gradients' \
+    if isinstance(model_name, tuple) else model_name
+
 ##############################################
 # -----------------Favicon--------------------
 ##############################################
@@ -63,7 +70,8 @@ async def favicon():
 def webcam_livestream(request: Request):
     return templates.TemplateResponse("webcam.html", {
         'request': request,
-        'webcam': True
+        'webcam': True,
+        'model_name': model_name,
     })
 
 
@@ -91,8 +99,6 @@ def gen(camera):
             camera.video.release()
 
 
-
-
 @app.get('/video_feed', response_class=HTMLResponse)
 async def video_feed():
     """Video streaming route. Put this in the src attribute of an img tag."""
@@ -108,7 +114,7 @@ async def video_feed():
 @app.get("/")
 def home(request: Request):
     global model
-    return templates.TemplateResponse('home.html', {"request": request})
+    return templates.TemplateResponse('home.html', {"request": request, 'model_name': model_name})
 
 
 @app.get("/about/")
@@ -118,7 +124,7 @@ def about_us(request: Request):
     ok
     '''
 
-    return templates.TemplateResponse('about.html', {"request": request})
+    return templates.TemplateResponse('about.html', {"request": request, 'model_name': model_name})
 
 
 @app.get("/video/")
@@ -140,13 +146,18 @@ async def video(request: Request, link: str | None = None):
 
         delete_video_files([filename])
 
+        print(out_file.split('/')[-1])
+
         return templates.TemplateResponse('video.html',
-                                          {"request": request, 'filename': out_file.split('/')[-1],
-                                           "video": True})
+                                          {"request": request,
+                                           'filename': out_file.split('/')[-1],
+                                           "video": True,
+                                           "model_name": model_name})
 
     return templates.TemplateResponse('video.html',
                                       {"request": request,
-                                       "video": True})
+                                       "video": True,
+                                       "model_name": model_name})
 
 
 @app.get("/get_video/{video_path}")
@@ -189,15 +200,16 @@ async def detect_via_web_form(request: Request,
     # create a copy that corrects for cv2.imdecode generating BGR images instead of RGB
     # using cvtColor instead of [...,::-1] to keep array contiguous in RAM
     img_batch = [cv2.imdecode(np.fromstring(await file.read(), np.uint8), cv2.IMREAD_COLOR) for file in file]
-    results = model(img_batch, imgsz=640, save=True)
+    results = model(img_batch, imgsz=640)
 
     box_values_list = results_values(results)
 
-    return templates.TemplateResponse('show_results.html', {
-        'request': request,
-        'end': True,
+    return templates.TemplateResponse("show_results.html", {
+        "request": request,
+        "end": True,
         # unzipped in jinja2 template
-        'box_values_list': box_values_list
+        "box_values_list": box_values_list,
+        "model_name": model_name
     })
 
 
@@ -221,7 +233,8 @@ async def video(request: Request, file: UploadFile = File(...)):
     if not (filename.split("/")[-1].split(".")[-1] in permit_video_format):
         return templates.TemplateResponse('video.html', {
             "request": request,
-            "mensagem": f"formatos de video aceitos: {permit_video_format}"
+            "mensagem": f"formatos de video aceitos: {permit_video_format}",
+            "model_name": model_name,
         })
 
     dir_input = dir_predict
@@ -246,35 +259,16 @@ async def video(request: Request, file: UploadFile = File(...)):
 
     return templates.TemplateResponse('video.html',
                                       {"request": request,
-                                       'filename': out_file.split('/')[-1],
-                                       "video": True})
-
-
-# @app.post("/webcam")
-async def detect_via_webcam(file: UploadFile = File(...)):
-    '''
-    Requires an image file upload, model name (ex. yolov8n). Optional image size parameter (Default 640).
-    Intended for human (non-api) users.
-    Returns: HTML template render showing bbox data and base64 encoded image
-    '''
-
-    # create a copy that corrects for cv2.imdecode generating BGR images instead of RGB
-    # using cvtColor instead of [...,::-1] to keep array contiguous in RAM
-    file = await file.read()
-    img_batch = cv2.imdecode(np.fromstring(file, np.uint8), cv2.IMREAD_COLOR)
-    img_batch_rgb = cv2.cvtColor(img_batch, cv2.COLOR_BGR2RGB)
-    results = model(img_batch_rgb, imgsz=640)
-
-    box_values_list = results_values(results)
-
-    return box_values_list[0]['im_b64']
+                                       "filename": out_file.split('/')[-1],
+                                       "video": True,
+                                       "model_name": model_name})
 
 
 def get_model_result(model, path) -> None:
     for _ in model.predict(path,
                            stream=True,
-                           save=True,
                            name="predict",
+                           save=True,
                            exist_ok=True,
                            project="static/",
                            vid_stride=True,
@@ -316,15 +310,23 @@ def youtube_link(link: str) -> str:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--host', default='localhost')
-    parser.add_argument('--port', default=8000)
-    # parser.add_argument('--gpu', action='store_false', help="Choise GPU instance")
-    parser.add_argument('--weight', default='bestn.pt')
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--host', default='localhost', help="\b")
+    parser.add_argument('--port', default=8000, help="\b")
+    parser.add_argument('--weight',
+                        default='v8n',
+                        choices=['v8n', 'v8s'],
+                        help="""
+                        v8n=YOLOv8n,
+                        v8s=YOLOv8s
+                        """)
+
     opt = parser.parse_args()
 
     with open('static/weight/weight_name', 'w') as f:
-        f.write(opt.weight)
+        choices = {'v8n': 'bestn.pt',
+                   'v8s': 'bests.pt'}
+        f.write(choices[opt.weight])
 
     app_str = 'main:app'  # make the app string equal to whatever the name of this file is
-    uvicorn.run(app_str, host=opt.host, port=opt.port, reload=True)
+    uvicorn.run(app_str, host=opt.host, port=opt.port)

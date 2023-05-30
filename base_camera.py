@@ -42,9 +42,9 @@ class CameraEvent(object):
             else:
                 # if the client's event is already set, it means the client
                 # did not process a previous frame
-                # if the event stays set for more than 5 seconds, then assume
+                # if the event stays set for more than 1 seconds, then assume
                 # the client is gone and remove it
-                if now - event[1] > 0:
+                if now - event[1] > 1:
                     remove.append(ident)
 
         for ident in remove:
@@ -101,7 +101,7 @@ class BaseCamera(object):
 
             # if there hasn't been any clients asking for frames in
             # the last 10 seconds then stop the thread
-            if time.time() - BaseCamera.last_access > 10:
+            if time.time() - BaseCamera.last_access > 5:
                 frames_iterator.close()
                 print('Stopping camera thread due to inactivity.')
                 break

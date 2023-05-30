@@ -1,9 +1,11 @@
 {% extends "layout.html" %}
 
 {% block content %}
+
   {% if webcam %}
-  <div class="container align-middle">
-      <img src="{{ url_for('video_feed') }}">
-  </div>
+      <div class="container align-middle">
+          <img src="{{ url_for('video_feed') }}">
+      </div>
   {% endif %}
+
 {% endblock %}
