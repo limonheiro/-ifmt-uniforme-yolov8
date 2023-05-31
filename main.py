@@ -68,6 +68,9 @@ async def favicon():
 
 @app.get("/webcam/")
 def webcam_livestream(request: Request):
+    """
+        Get Webcam server or stream video
+    """
     return templates.TemplateResponse("webcam.html", {
         'request': request,
         'webcam': True,
@@ -76,7 +79,9 @@ def webcam_livestream(request: Request):
 
 
 def gen(camera):
-    """Video streaming generator function."""
+    """
+        Video streaming generator function.
+    """
 
     while True:
         try:
@@ -101,7 +106,9 @@ def gen(camera):
 
 @app.get('/video_feed', response_class=HTMLResponse)
 async def video_feed():
-    """Video streaming route. Put this in the src attribute of an img tag."""
+    """
+        Video streaming route. Put this in the src attribute of an img tag.
+    """
     return StreamingResponse(gen(Camera()),
                              media_type='multipart/x-mixed-replace; boundary=frame')
 
@@ -113,25 +120,25 @@ async def video_feed():
 
 @app.get("/")
 def home(request: Request):
-    global model
+    """
+        Home Page
+    """
     return templates.TemplateResponse('home.html', {"request": request, 'model_name': model_name})
 
 
 @app.get("/about/")
 def about_us(request: Request):
-    '''
-    Display about us page
-    ok
-    '''
-
+    """
+        Display about us page
+    """
     return templates.TemplateResponse('about.html', {"request": request, 'model_name': model_name})
 
 
 @app.get("/video/")
 async def video(request: Request, link: str | None = None):
-    '''
-    Display about us page
-    '''
+    """
+        Send a link, ex: YouTube, and return a predict video
+    """
 
     if link:
         link = youtube_link(link)
@@ -162,6 +169,9 @@ async def video(request: Request, link: str | None = None):
 
 @app.get("/get_video/{video_path}")
 def get_video(video_path: str):
+    """
+        Return convert video in predict directory
+    """
     if video_path:
         filename = f'static/predict/{video_path}'
 
@@ -215,9 +225,10 @@ async def detect_via_web_form(request: Request,
 
 @app.post("/video/")
 async def video(request: Request, file: UploadFile = File(...)):
-    '''
-    Requires an video file upload, max_size 2Mb
-    '''
+    """
+    Requires a video file upload, max_size 2Mb
+    Return: video predict with bbox predict
+    """
 
     content = await file.read()
     filename = file.filename
@@ -265,6 +276,9 @@ async def video(request: Request, file: UploadFile = File(...)):
 
 
 def get_model_result(model, path) -> None:
+    """
+        Return result by predict
+    """
     for _ in model.predict(path,
                            stream=True,
                            name="predict",
@@ -277,13 +291,19 @@ def get_model_result(model, path) -> None:
         continue
 
 
-async def iterable(file_output):  #
+async def iterable(file_output):
+    """
+        return streaming video
+    """
     with open(file_output, mode="rb") as f:  #
         yield f.read()
 
 
 # Code copied from https://github.com/kkroening/ffmpeg-python/issues/246#issuecomment-520200981
 def vidwrite(input: str, output: str, vcodec='libx264') -> None:
+    """
+        Convert video
+    """
     process = (
         ffmpeg
         .input(input)
@@ -295,6 +315,9 @@ def vidwrite(input: str, output: str, vcodec='libx264') -> None:
 
 
 def delete_video_files(file_list: list) -> None:
+    """
+        Delete upload user video
+    """
     for file in file_list:
         os.remove(file)
         if os.path.isfile(f'{file.split(".")[0]}.mp4'):
@@ -302,6 +325,10 @@ def delete_video_files(file_list: list) -> None:
 
 
 def youtube_link(link: str) -> str:
+    """
+        if URI input is invidiuos, or another front-ends YouTube, and Shorts
+        Return: normal YouTube URI
+    """
     if "youtube" in link and not "watch?v=" in link:
         link = f'https://youtube.com/watch?v={link.split("/")[-1]}'
     elif "watch?v=" in link:

@@ -3,6 +3,10 @@
 import cv2
 from base_camera import BaseCamera
 
+#
+# Source : https://github.com/SGyutan/Fastapi_livecamera
+#
+
 
 class Camera(BaseCamera):
     def __init__(self):

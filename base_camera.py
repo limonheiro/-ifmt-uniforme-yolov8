@@ -1,8 +1,14 @@
 # base_camera.py
-import copy
 import time
 import threading
 
+#
+# Source : https://github.com/SGyutan/Fastapi_livecamera
+#
+
+# https://greenlet.readthedocs.io/en/latest/
+# greenlets are lightweight coroutines for in-process sequential concurrent programming.
+#
 try:
     from greenlet import getcurrent as get_ident
 except ImportError:
