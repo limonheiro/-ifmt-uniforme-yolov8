@@ -35,6 +35,7 @@ nvidia-nccl-cu11==2.14.3
 nvidia-nvtx-cu11==11.7.91
 opencv-python==4.7.0.72
 packaging==23.1
+pafy==0.5.5
 pandas==2.0.1
 Pillow==9.5.0
 psutil==5.9.5
@@ -61,3 +62,4 @@ tzdata==2023.3
 ultralytics==8.0.109
 urllib3==1.26.16
 uvicorn==0.22.0
+youtube-dl==2020.12.2
