@@ -53,6 +53,7 @@ model_name = Path(yaml_file).stem.replace('yolo', 'YOLO') or model.info()
 model_name = f'Model summary: {model_name[0]} layers, {model_name[1]} parameters, {model_name[2]} gradients' \
     if isinstance(model_name, tuple) else model_name
 
+
 ##############################################
 # -----------------Favicon--------------------
 ##############################################
@@ -279,12 +280,13 @@ def get_model_result(model, path) -> None:
     """
         Return result by predict
     """
+    project, name, _ = dir_predict.split('/')
     for _ in model.predict(path,
                            stream=True,
-                           name="predict",
+                           project=project,
+                           name=name,
                            save=True,
                            exist_ok=True,
-                           project="static/",
                            vid_stride=True,
                            line_width=1,
                            ):
@@ -356,4 +358,4 @@ if __name__ == '__main__':
         f.write(choices[opt.weight])
 
     app_str = 'main:app'  # make the app string equal to whatever the name of this file is
-    uvicorn.run(app_str, host=opt.host, port=opt.port)
+    uvicorn.run(app_str, host=opt.host, port=opt.port, reload=True)
