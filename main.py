@@ -1,5 +1,6 @@
+import socket
 from typing import List, Any
-from fastapi import FastAPI, Request, File, UploadFile
+from fastapi import FastAPI, Request, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import StreamingResponse, Response, HTMLResponse
@@ -15,10 +16,9 @@ import cv2
 from ultralytics import YOLO
 import ffmpeg
 import os
+import websockets as webs
 
 from utils.result import results_values
-
-from camera_multi import Camera
 
 app = FastAPI(root_path="")
 favicon_path = 'favicon.ico'
@@ -54,6 +54,7 @@ model_name = f'Model summary: {model_name[0]} layers, {model_name[1]} parameters
     if isinstance(model_name, tuple) else model_name
 
 
+
 ##############################################
 # -----------------Favicon--------------------
 ##############################################
@@ -66,6 +67,28 @@ async def favicon():
 ############################################
 # -----------------Webcam--------------------
 #############################################
+@app.websocket("/ws")
+async def get_stream(websocket: WebSocket):
+    camera = cv2.VideoCapture(0)
+    await websocket.accept()
+    try:
+        while True:
+            success, frame = camera.read()
+            if not success:
+                print("camera off")
+                break
+            else:
+                results = model(frame, imgsz=320)
+
+                for r in results:
+                    img = r.plot(line_width=1, font_size=1)
+                    frame = cv2.imencode('.jpg', img)[1].tobytes()
+                await websocket.send_bytes(frame)
+
+    except webs.exceptions.ConnectionClosedError:
+        camera.release()
+        await websocket.close()
+        print("Client disconnected")
 
 @app.get("/webcam/")
 def webcam_livestream(request: Request):
@@ -77,41 +100,6 @@ def webcam_livestream(request: Request):
         'webcam': True,
         'model_name': model_name,
     })
-
-
-def gen(camera):
-    """
-        Video streaming generator function.
-    """
-
-    while True:
-        try:
-            frame = camera.get_frame()
-
-            img_batch = cv2.imdecode(np.fromstring(frame, np.uint8), cv2.IMREAD_COLOR)
-            img_batch_rgb = cv2.cvtColor(img_batch, cv2.COLOR_BGR2RGB)
-            results = model(img_batch_rgb, imgsz=640)
-
-            for r in results:
-                img = r.plot()
-                frame = cv2.imencode('.jpg', cv2.cvtColor(img, cv2.COLOR_BGR2RGB))[1].tobytes()
-
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpg\r\n\r\n' + frame + b'\r\n')
-
-        except cv2.error as e:
-            camera.video.release()
-        except TypeError as e:
-            camera.video.release()
-
-
-@app.get('/video_feed', response_class=HTMLResponse)
-async def video_feed():
-    """
-        Video streaming route. Put this in the src attribute of an img tag.
-    """
-    return StreamingResponse(gen(Camera()),
-                             media_type='multipart/x-mixed-replace; boundary=frame')
 
 
 ##############################################
@@ -282,6 +270,7 @@ def get_model_result(model, path) -> None:
     """
     project, name, _ = dir_predict.split('/')
     for _ in model.predict(path,
+                           imgsz=1280,
                            stream=True,
                            project=project,
                            name=name,
@@ -358,4 +347,4 @@ if __name__ == '__main__':
         f.write(choices[opt.weight])
 
     app_str = 'main:app'  # make the app string equal to whatever the name of this file is
-    uvicorn.run(app_str, host=opt.host, port=opt.port, reload=True)
+    uvicorn.run(app_str, host=opt.host, port=int(opt.port))

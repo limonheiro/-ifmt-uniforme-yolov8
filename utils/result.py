@@ -5,7 +5,7 @@ import base64
 def results_values(results):
     r = []
     for result in results:
-        img = result.plot()
+        img = result.plot(line_width=1, font_size=1)
         _, im_arr = cv2.imencode('.jpg', img)
         im_b64 = base64.b64encode(im_arr.tobytes()).decode('utf-8')
         names = result.names
