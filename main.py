@@ -297,7 +297,7 @@ def get_model_result(model, path) -> None:
     """
     project, name, _ = dir_predict.split('/')
     for _ in model.predict(path,
-                           imgsz=128,
+                           imgsz=640,
                            stream=True,
                            project=project,
                            name=name,
