@@ -17,6 +17,9 @@
 
 ![Video Page](screenshot/03-Video-Predict-Page.png "Video Page")
 
+[Screencast from 04-06-2023 01:28:49.webm](https://github.com/limonheiro/-ifmt-uniforme-yolov8/assets/17358136/3a7c1b63-ef62-4d6e-b5af-f7e152d3e5b6)
+
+
 **Predict Video**
 
 ![Video Page](screenshot/04-Predict-input-video-by-YouTube-link.png "Video Page")
