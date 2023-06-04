@@ -20,6 +20,14 @@ import websockets as webs
 
 from utils.result import results_values
 
+import glob
+
+dir_predict = "static/predict/"
+
+files = glob.glob(f'{dir_predict}*')
+for f in files:
+    os.remove(f)
+
 app = FastAPI(root_path="")
 favicon_path = 'favicon.ico'
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -40,7 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-dir_predict = "static/predict/"
+
 
 with open('static/weight/weight_name', 'r') as f:
     weight = f.readline()
@@ -52,7 +60,6 @@ yaml_file = getattr(model.model, 'yaml_file', '') or getattr(model.model, 'yaml'
 model_name = Path(yaml_file).stem.replace('yolo', 'YOLO') or model.info()
 model_name = f'Model summary: {model_name[0]} layers, {model_name[1]} parameters, {model_name[2]} gradients' \
     if isinstance(model_name, tuple) else model_name
-
 
 
 ##############################################
@@ -67,28 +74,48 @@ async def favicon():
 ############################################
 # -----------------Webcam--------------------
 #############################################
+
 @app.websocket("/ws")
 async def get_stream(websocket: WebSocket):
     camera = cv2.VideoCapture(0)
+    camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('Y', 'U', 'Y', 'V'))  # depends on fourcc available camera
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    camera.set(cv2.CAP_PROP_FPS, 15)
+
     await websocket.accept()
+
+    async def close_websocket():
+        camera.release()
+        await websocket.close(code=100)
+        print("Client disconnected")
+
     try:
         while True:
             success, frame = camera.read()
             if not success:
-                print("camera off")
+                close_websocket()
                 break
             else:
                 results = model(frame, imgsz=320)
 
                 for r in results:
                     img = r.plot(line_width=1, font_size=1)
-                    frame = cv2.imencode('.jpg', img)[1].tobytes()
+                    conf = r.boxes.conf.amin().item() if len(r.boxes.conf) else 0
+                    # choice confidence above 50%
+                    if conf > 0.5:
+                        frame = cv2.imencode('.jpg', img)[1].tobytes()
+                    else:
+                        frame = cv2.imencode('.jpg', frame)[1].tobytes()
+
                 await websocket.send_bytes(frame)
 
     except webs.exceptions.ConnectionClosedError:
-        camera.release()
-        await websocket.close()
-        print("Client disconnected")
+        close_websocket()
+    except Exception as e:
+        print(e)
+        close_websocket()
+
 
 @app.get("/webcam/")
 def webcam_livestream(request: Request):
@@ -270,15 +297,14 @@ def get_model_result(model, path) -> None:
     """
     project, name, _ = dir_predict.split('/')
     for _ in model.predict(path,
-                           imgsz=1280,
+                           imgsz=640,
                            stream=True,
                            project=project,
                            name=name,
                            save=True,
                            exist_ok=True,
                            vid_stride=True,
-                           line_width=1,
-                           ):
+                           line_width=1):
         continue
 
 
@@ -347,4 +373,10 @@ if __name__ == '__main__':
         f.write(choices[opt.weight])
 
     app_str = 'main:app'  # make the app string equal to whatever the name of this file is
-    uvicorn.run(app_str, host=opt.host, port=int(opt.port))
+    uvicorn.run(app_str,
+                host=opt.host,
+                port=int(opt.port),
+                ws_ping_interval=1,
+                ws_ping_timeout=1,
+                timeout_keep_alive=1,
+                workers=4)

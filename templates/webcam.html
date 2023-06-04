@@ -3,17 +3,28 @@
 {% block content %}
 
   {% if webcam %}
-       <img id="frame" src="">
+        <div class="container">
+            <div id="status" class="p-3 mb-2 bg-warning text-dark">
+                Connection failed. Somebody may be using the socket.
+            </div>
+            <img id="frame" src="">
+        </div>
+
         <script>
             let ws = new WebSocket("ws://localhost:8000/ws");
             let image = document.getElementById("frame");
             image.onload = function(){
                 URL.revokeObjectURL(this.src); // release the blob URL once the image is loaded
+                warning = document.getElementById("status");
+                warning.innerHTML = "";
+                warning.classList.remove("bg-warning");
+
             }
             ws.onmessage = function(event) {
                 image.src = URL.createObjectURL(event.data);
             };
         </script>
+
   {% endif %}
 
 {% endblock %}
