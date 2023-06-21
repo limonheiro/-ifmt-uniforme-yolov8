@@ -12,7 +12,8 @@
 
         <script>
             function start(){
-                let ws = new WebSocket("ws://localhost:8000/ws");
+                host = self.location.host
+                let ws = new WebSocket("ws://"+host+"/ws");
                 let image = document.getElementById("frame");
 
                 image.onload = function(){
@@ -28,7 +29,8 @@
 
                 let warning = document.getElementById("status");
                 let text = warning.attributes.class.value;
-            }
+
+               }
             start()
         </script>
 

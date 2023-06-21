@@ -1,4 +1,3 @@
-import socket
 from typing import List, Any
 from fastapi import FastAPI, Request, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.templating import Jinja2Templates
@@ -335,10 +334,13 @@ def delete_video_files(file_list: list) -> None:
     """
         Delete upload user video
     """
-    for file in file_list:
-        os.remove(file)
-        if os.path.isfile(f'{file.split(".")[0]}.mp4'):
-            os.remove(f'{file.split(".")[0]}.mp4')
+    try:
+        for file in file_list:
+            os.remove(file)
+            if os.path.isfile(f'{file.split(".")[0]}.mp4'):
+                os.remove(f'{file.split(".")[0]}.mp4')
+    except FileNotFoundError as e:
+        print (e)
 
 
 def youtube_link(link: str) -> str:
@@ -376,7 +378,7 @@ if __name__ == '__main__':
     uvicorn.run(app_str,
                 host=opt.host,
                 port=int(opt.port),
-                ws_ping_interval=1,
-                ws_ping_timeout=1,
+                ws_ping_interval=0.1,
+                ws_ping_timeout=0.1,
                 timeout_keep_alive=1,
-                workers=4)
+                workers=8)
